@@ -8,10 +8,8 @@ shipped this on Jetson Nano — own it.
 
 ## The canonical DeepStream pipeline
 
-```
-[cam1 rtspsrc]┐
-[cam2 rtspsrc]┤→ nvstreammux → nvinfer → nvtracker → nvdsosd → nvv4l2h264enc → sink
-[camN rtspsrc]┘   (batch N)    (TRT)     (track IDs)  (overlay)  (encode out)
+```fig:deepstreamFull
+The canonical DeepStream pipeline — N cameras batched into one inference call
 ```
 
 Key plugins:
@@ -81,11 +79,8 @@ point as section 03.
 Detections don't come back as pixels — they're a nested C structure you walk via
 `pyds`:
 
-```
-NvDsBatchMeta              (the whole batch)
-  └─ NvDsFrameMeta         (one frame / one source — has source_id, frame_num)
-       └─ NvDsObjectMeta   (one detection — bbox, class_id, confidence, object_id=track ID)
-            └─ NvDsClassifierMeta   (secondary-GIE labels on that object)
+```fig:dsMeta
+The metadata nests batch → frame → object → classifier; you walk it in a probe
 ```
 
 You attach a **pad probe** (from [pipeline-model.md](pipeline-model.md)) on

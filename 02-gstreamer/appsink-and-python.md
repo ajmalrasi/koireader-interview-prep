@@ -5,6 +5,10 @@ your Python code; `appsrc` pushes frames *in*. The trick is to pull frames witho
 copying more than necessary and without letting the buffer grow. Configure
 `appsink` with `max-buffers=1 drop=true` and you have a "latest frame only" tap.
 
+```fig:appsink
+appsink is the pipeline's exit into Python — a "latest frame only" tap
+```
+
 ## Two ways to consume
 
 **A) Via OpenCV (quick):**

@@ -35,16 +35,12 @@ the delivery, and RTP as the truck that shows up.
 
 **The handshake (worth knowing line-by-line for interviews):**
 
+```fig:rtspHandshake
+RTSP handshake: the client sets up the session, then RTP delivers the video
 ```
-C → S: OPTIONS    rtsp://cam/stream        "what can you do?"
-C → S: DESCRIBE   rtsp://cam/stream        "describe the stream"  →  server returns SDP
-                                            (codec=H.264, resolution, clock rate)
-C → S: SETUP      rtsp://cam/stream/trackID=0   "set up transport; here are my ports
-                                                  (or use TCP interleaved)"
-C → S: PLAY       rtsp://cam/stream        "start sending"  →  RTP packets begin flowing
-   ... media flows as RTP, stats as RTCP, keepalives keep the session open ...
-C → S: TEARDOWN   rtsp://cam/stream        "stop and free the session"
-```
+
+After `PLAY`, media flows as RTP and stats as RTCP; periodic keepalives
+(`GET_PARAMETER`/`OPTIONS`) hold the session open until `TEARDOWN`.
 
 **Pattern:** *Pull.* Your pipeline dials out to
 `rtsp://user:pass@cam-ip:554/stream`. Port **554** is the RTSP control channel.
@@ -112,18 +108,12 @@ three a browser can speak natively (`RTCPeerConnection`).
 **The four phases of a connection** (memorize this arc — it's the most common
 WebRTC interview question):
 
+```fig:webrtcFlow
+The four phases of every WebRTC connection — signaling is the part you build
 ```
-1. SIGNALING   Peers exchange SDP offer/answer  ── via a server YOU build
-               (WebSocket, HTTP, anything). WebRTC does NOT define signaling.
-                         │
-2. ICE         Each peer gathers "candidates" (host / STUN-reflexive / TURN-relay)
-               and they probe pairs to find a path that works through NAT.
-                         │
-3. DTLS        A DTLS handshake over the chosen path exchanges keys.
-                         │
-4. SRTP        Media flows as SRTP (encrypted RTP). Congestion control + NACK/FEC
-               keep it smooth. RTCP feedback runs continuously.
-```
+
+Signaling (the SDP offer/answer exchange) is the one piece WebRTC leaves to you —
+a WebSocket is the usual choice. The rest (ICE, DTLS, SRTP) the stack handles.
 
 **SDP offer/answer.** The offer is a text blob describing "here are my codecs
 (H.264/VP8/VP9/AV1/Opus), resolutions, ICE credentials, DTLS fingerprint." The
@@ -219,17 +209,8 @@ NVDEC + DeepStream territory. Know which side of that line a given problem is on
 
 ## How they fit together — the KoiReader path
 
-```
- IP cameras ──RTSP/RTP──▶  GStreamer ingest ──▶ DeepStream/TensorRT ──▶ annotated frames
- (pull, TCP,                (rtspsrc, NVDEC,        (inference, tracking)        │
-  ~1s)                       jitter buffer)                                      │
-                                                                                 ▼
-                                                          ┌──────────────────────────────┐
-                                                          │  Deliver to humans/agents     │
-                                                          │  • WebRTC (webrtcbin / SFU)   │  ◀ sub-500ms
-                                                          │  • FastRTC (quick operator UI)│
-                                                          │  • HLS/DASH (only if broadcast)│
-                                                          └──────────────────────────────┘
+```fig:koiPath
+RTSP in from cameras, GStreamer + DeepStream in the middle, WebRTC out to people
 ```
 
 **RTSP in, WebRTC out** is the headline. The same RTP machinery runs end to end;

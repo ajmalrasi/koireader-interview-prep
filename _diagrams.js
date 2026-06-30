@@ -200,6 +200,174 @@ D.logic = {h:210, body:
   '<text class="dg-sub" x="360" y="202" text-anchor="middle">geometry + stats on top of boxes = the JD\'s logic layer</text>'
 };
 
+// RTSP handshake (sequence: client ↔ camera)
+D.rtspHandshake = (()=>{
+  const cx=150, sx=570; let b="";
+  b+=box(58,16,184,42,"Your pipeline","(client)");
+  b+=box(478,16,184,42,"IP camera","(server)");
+  b+='<line class="dg-strokeB" x1="'+cx+'" y1="58" x2="'+cx+'" y2="316"/>';
+  b+='<line class="dg-strokeB" x1="'+sx+'" y1="58" x2="'+sx+'" y2="316"/>';
+  const msgs=[["OPTIONS","what can you do?"],["DESCRIBE  → SDP","codec · resolution"],
+    ["SETUP","pick UDP or TCP transport"],["PLAY","start sending"]];
+  let y=92;
+  msgs.forEach(m=>{
+    b+='<line class="dg-line" x1="'+cx+'" y1="'+y+'" x2="'+(sx-7)+'" y2="'+y+'"/>';
+    b+='<polygon class="dg-arrow" points="'+(sx-7)+','+(y-5)+' '+sx+','+y+' '+(sx-7)+','+(y+5)+'"/>';
+    b+='<text class="dg-accent-tx" x="360" y="'+(y-9)+'" text-anchor="middle">'+m[0]+'</text>';
+    b+='<text class="dg-sub" x="360" y="'+(y+15)+'" text-anchor="middle">'+m[1]+'</text>';
+    y+=50;
+  });
+  b+='<rect class="dg-hot" x="'+cx+'" y="'+(y-4)+'" width="'+(sx-cx)+'" height="36" rx="9"/>';
+  b+='<text class="dg-label" x="360" y="'+(y+19)+'" text-anchor="middle">◀  RTP media + RTCP stats flow</text>';
+  return {h:330, body:b+
+    '<text class="dg-sub" x="360" y="322" text-anchor="middle">RTSP sets up the session · RTP carries the actual video</text>'};
+})();
+
+// WebRTC connection: four phases (vertical)
+D.webrtcFlow = (()=>{
+  const steps=[["1 · SIGNALING","SDP offer / answer — through a server you build"],
+    ["2 · ICE","gather host / STUN / TURN candidates, find a path through NAT"],
+    ["3 · DTLS","handshake exchanges the encryption keys"],
+    ["4 · SRTP","encrypted media flows · congestion control · NACK / FEC"]];
+  const x=120,w=480,h=58,gap=22; let y=20,b="";
+  steps.forEach((s,i)=>{
+    b+='<rect class="'+(i===3?'dg-box dg-hot':'dg-box')+'" x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" rx="12"/>';
+    b+='<text class="dg-label" x="'+(x+20)+'" y="'+(y+25)+'">'+s[0]+'</text>';
+    b+='<text class="dg-sub" x="'+(x+20)+'" y="'+(y+45)+'">'+s[1]+'</text>';
+    if(i<steps.length-1){ const a=y+h,a2=y+h+gap;
+      b+='<line class="dg-line" x1="360" y1="'+a+'" x2="360" y2="'+(a2-7)+'"/>';
+      b+='<polygon class="dg-arrow" points="354,'+(a2-7)+' 366,'+(a2-7)+' 360,'+a2+'"/>'; }
+    y+=h+gap;
+  });
+  return {h:y+6, body:b};
+})();
+
+// KoiReader path: RTSP in → process → fan-out
+D.koiPath = (()=>{
+  let b="";
+  b+=box(12,72,118,60,"Cameras","RTSP, pull");
+  b+='<text class="dg-accent-tx" x="170" y="92" text-anchor="middle">RTSP</text>'+arrow(130,102,212);
+  b+=box(212,72,128,60,"GStreamer","rtspsrc · NVDEC");
+  b+=arrow(340,102,392);
+  b+='<rect class="dg-box dg-hot" x="392" y="72" width="138" height="60" rx="12"/>';
+  b+='<text class="dg-label" x="461" y="98" text-anchor="middle">DeepStream</text>';
+  b+='<text class="dg-sub" x="461" y="117" text-anchor="middle">infer · track</text>';
+  b+='<text class="dg-accent-tx" x="566" y="92" text-anchor="middle">WebRTC</text>'+arrow(530,102,604);
+  b+='<rect class="dg-box" x="560" y="36" width="150" height="132" rx="12"/>';
+  b+='<text class="dg-label" x="635" y="58" text-anchor="middle">Deliver</text>';
+  b+='<text class="dg-sub" x="635" y="84" text-anchor="middle">WebRTC · SFU</text>';
+  b+='<text class="dg-sub" x="635" y="104" text-anchor="middle">FastRTC UI</text>';
+  b+='<text class="dg-sub" x="635" y="124" text-anchor="middle">HLS (broadcast</text>';
+  b+='<text class="dg-sub" x="635" y="142" text-anchor="middle">only)</text>';
+  return {h:200, body:b+
+    '<text class="dg-sub" x="300" y="186" text-anchor="middle">RTSP in  ·  GStreamer + DeepStream in the middle  ·  WebRTC out</text>'};
+})();
+
+// GStreamer: the "!" links a source pad to a sink pad
+D.gstPads = (()=>{
+  let b="";
+  b+='<rect class="dg-box" x="96" y="54" width="190" height="64" rx="12"/>';
+  b+='<text class="dg-label" x="191" y="90" text-anchor="middle">h264parse</text>';
+  b+='<rect class="dg-accent-soft" x="278" y="74" width="22" height="24" rx="4"/>';
+  b+='<text class="dg-sub" x="289" y="48" text-anchor="middle">src pad</text>';
+  b+='<rect class="dg-box" x="434" y="54" width="190" height="64" rx="12"/>';
+  b+='<text class="dg-label" x="529" y="90" text-anchor="middle">nvv4l2decoder</text>';
+  b+='<rect class="dg-accent-soft" x="420" y="74" width="22" height="24" rx="4"/>';
+  b+='<text class="dg-sub" x="431" y="48" text-anchor="middle">sink pad</text>';
+  b+='<text class="dg-accent-tx" x="360" y="80" text-anchor="middle">!</text>';
+  b+=arrow(300,98,420);
+  return {h:150, body:b+
+    '<text class="dg-sub" x="360" y="138" text-anchor="middle">"!" links one element\'s source pad (out) to the next element\'s sink pad (in)</text>'};
+})();
+
+// GStreamer: caps negotiation + capsfilter
+D.gstCaps = (()=>{
+  let b="";
+  b+=box(34,58,150,58,"nvvidconv","");
+  b+=arrow(184,87,250);
+  b+='<rect class="dg-box dg-hot" x="250" y="62" width="220" height="50" rx="25"/>';
+  b+='<text class="dg-label" x="360" y="92" text-anchor="middle">video/x-raw, format=BGR</text>';
+  b+='<text class="dg-sub" x="360" y="48" text-anchor="middle">capsfilter — you pin the format</text>';
+  b+=arrow(470,87,536);
+  b+=box(536,58,150,58,"appsink","");
+  return {h:150, body:b+
+    '<text class="dg-sub" x="360" y="138" text-anchor="middle">pads negotiate a common format · empty intersection = "not-negotiated"</text>'};
+})();
+
+// GStreamer: tee branching
+D.gstTee = (()=>{
+  let b="";
+  b+=box(14,86,150,52,"rtspsrc ! decode","");
+  b+=arrow(164,112,214);
+  b+='<rect class="dg-box dg-hot" x="214" y="86" width="64" height="52" rx="12"/>';
+  b+='<text class="dg-label" x="246" y="117" text-anchor="middle">tee</text>';
+  const branches=[["queue ! nvinfer","analytics",34],["queue ! splitmuxsink","record to disk",112],["queue ! webrtcbin","live to browser",190]];
+  branches.forEach(br=>{
+    const y=br[2]+18;
+    b+='<path class="dg-line" d="M278 112 C 320 112 320 '+y+' 360 '+y+'"/>';
+    b+='<polygon class="dg-arrow" points="353,'+(y-5)+' 360,'+y+' 353,'+(y+5)+'"/>';
+    b+='<rect class="dg-box" x="364" y="'+br[2]+'" width="250" height="40" rx="10"/>';
+    b+='<text class="dg-label" x="378" y="'+(br[2]+18)+'">'+br[0]+'</text>';
+    b+='<text class="dg-sub" x="378" y="'+(br[2]+33)+'">'+br[1]+'</text>';
+  });
+  return {h:250, body:b+
+    '<text class="dg-sub" x="300" y="242" text-anchor="middle">one stream → many consumers · a queue per branch so none stalls the others</text>'};
+})();
+
+// DeepStream full pipeline (cams → mux → infer → track → osd → out)
+D.deepstreamFull = (()=>{
+  let b="";
+  for(let i=0;i<3;i++){ const y=34+i*42; b+='<rect class="dg-box" x="12" y="'+y+'" width="92" height="32" rx="8"/>';
+    b+='<text class="dg-sub" x="58" y="'+(y+20)+'" text-anchor="middle">cam '+(i+1)+'</text>';
+    b+=arrow(104,y+16,150); }
+  b+='<rect class="dg-box dg-hot" x="150" y="44" width="96" height="84" rx="12"/>';
+  b+='<text class="dg-label" x="198" y="80" text-anchor="middle">stream</text>';
+  b+='<text class="dg-label" x="198" y="98" text-anchor="middle">mux</text>';
+  b+='<text class="dg-sub" x="198" y="118" text-anchor="middle">batch=N</text>';
+  const stages=[["nvinfer","TRT",256],["nvtracker","+ IDs",360],["nvdsosd","overlay",464]];
+  stages.forEach(s=>{ b+=arrow(s[2]-10,86,s[2]);
+    b+='<rect class="dg-box" x="'+s[2]+'" y="56" width="92" height="60" rx="11"/>';
+    b+='<text class="dg-label" x="'+(s[2]+46)+'" y="82" text-anchor="middle">'+s[0]+'</text>';
+    b+='<text class="dg-sub" x="'+(s[2]+46)+'" y="100" text-anchor="middle">'+s[1]+'</text>'; });
+  b+=arrow(556,86,566);
+  b+='<rect class="dg-box" x="566" y="56" width="140" height="60" rx="11"/>';
+  b+='<text class="dg-label" x="636" y="82" text-anchor="middle">encode →</text>';
+  b+='<text class="dg-sub" x="636" y="100" text-anchor="middle">RTSP / WebRTC out</text>';
+  return {h:175, body:b+
+    '<text class="dg-sub" x="360" y="160" text-anchor="middle">many cameras batched into ONE inference call = the multi-stream scaling trick</text>'};
+})();
+
+// DeepStream metadata hierarchy (nested boxes)
+D.dsMeta = (()=>{
+  let b="";
+  const layers=[["NvDsBatchMeta","the whole batch",40,18,560,200,"dg-box"],
+    ["NvDsFrameMeta","one frame · source_id, frame_num",72,56,496,150,"dg-box"],
+    ["NvDsObjectMeta","one detection · bbox, class, conf, track id",104,94,432,100,"dg-box dg-hot"],
+    ["NvDsClassifierMeta","secondary-GIE labels on that object",136,132,368,48,"dg-box"]];
+  layers.forEach(l=>{
+    b+='<rect class="'+l[6]+'" x="'+l[2]+'" y="'+l[3]+'" width="'+l[4]+'" height="'+l[5]+'" rx="11"/>';
+    b+='<text class="dg-label" x="'+(l[2]+16)+'" y="'+(l[3]+22)+'">'+l[0]+'</text>';
+    b+='<text class="dg-sub" x="'+(l[2]+16)+'" y="'+(l[3]+40)+'">'+l[1]+'</text>';
+  });
+  return {h:236, body:b+
+    '<text class="dg-sub" x="360" y="230" text-anchor="middle">walk this in a pad probe — read metadata, never copy the pixels</text>'};
+})();
+
+// appsink: the "latest frame" tap into Python
+D.appsink = (()=>{
+  let b="";
+  b+=box(12,60,150,58,"… decode ! convert","");
+  b+=arrow(162,89,224);
+  b+='<rect class="dg-box dg-hot" x="224" y="60" width="160" height="58" rx="12"/>';
+  b+='<text class="dg-label" x="304" y="84" text-anchor="middle">appsink</text>';
+  b+='<text class="dg-sub" x="304" y="103" text-anchor="middle">max-buffers=1 drop=true</text>';
+  b+='<text class="dg-accent-tx" x="446" y="82" text-anchor="middle">numpy</text>';
+  b+=arrow(384,89,508);
+  b+=box(508,60,150,58,"your model","infer");
+  b+='<text class="dg-sub" x="304" y="142" text-anchor="middle">drops stale frames under load → bounded memory, minimal lag</text>';
+  return {h:160, body:b};
+})();
+
 const DIAGRAMS = {
   "README.md": ["pipeline","The journey of every frame, end to end"],
   "01-video-streaming/protocols-rtsp-webrtc.md": ["protocols","RTSP in from cameras, WebRTC out to browsers"],

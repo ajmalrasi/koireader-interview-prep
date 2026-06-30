@@ -23,15 +23,12 @@ through. The bus is the intercom that tells your app about errors and end-of-str
 
 ## A pipeline in words
 
-```
-rtspsrc ! rtph264depay ! h264parse ! nvv4l2decoder ! nvvidconv ! appsink
-  │           │             │            │              │          │
- pull from   strip RTP   find frame   GPU decode    color/format  hand to
- camera      packaging   boundaries   (NVDEC)       convert       your code
-```
-
 The `!` is shorthand for "link the source pad of the left element to the sink pad
-of the right element."
+of the right element":
+
+```fig:gstPads
+Each "!" connects an output (source) pad to the next element's input (sink) pad
+```
 
 ## Dynamic pads (the gotcha interviewers love)
 
@@ -69,9 +66,8 @@ you get the classic `not-negotiated (-4)` error. A **capsfilter** (the
 `video/x-raw,format=BGR` you see between elements) *forces* a specific format —
 that's you pinning the contract rather than letting it auto-pick.
 
-```
-nvvidconv ! video/x-raw,format=BGRx ! videoconvert ! video/x-raw,format=BGR ! appsink
-            └─────── capsfilter ───────┘             └──── capsfilter ────┘
+```fig:gstCaps
+A capsfilter between two elements pins the exact format they exchange
 ```
 
 Three failure signatures worth recognizing instantly in an interview:
@@ -133,10 +129,8 @@ To send one stream to multiple consumers — infer on it *and* record it *and* p
 it to WebRTC — use **`tee`**, and put a **`queue` after every branch**. Without the
 per-branch queue the slowest branch stalls all of them (they'd share one thread).
 
-```
-                  ┌─ queue ! nvinfer ! ...        (analytics)
-rtspsrc ! ... ! tee ┼─ queue ! splitmuxsink        (record to disk)
-                  └─ queue ! webrtcbin             (live to browser)
+```fig:gstTee
+tee fans one stream to many branches — give every branch its own queue
 ```
 
 ## queue tuning: leaky for live, blocking for recorded

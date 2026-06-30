@@ -2,6 +2,8 @@
     --bg:#faf9f5; --bg-soft:#f1efe7; --bg-side:#f6f4ee; --text:#23211c;
     --muted:#6b6557; --border:#e4e0d5; --accent:#c45f3c; --accent-2:#d97757;
     --accent-soft:#f6e7df; --code-bg:#f1efe7; --code-text:#5a4636; --quote:#5c5547;
+    --tok-comment:#9b9482; --tok-string:#5f8a3f; --tok-keyword:#c45f3c; --tok-builtin:#15807f;
+    --tok-number:#a9762a; --tok-decorator:#8b6dff; --tok-command:#15807f; --tok-flag:#a9762a; --tok-variable:#8b6dff;
     --link:#b9532f; --header-bg:rgba(250,249,245,.85);
     --shadow:0 1px 2px rgba(60,50,30,.05),0 6px 20px rgba(60,50,30,.06);
     --radius:12px;
@@ -10,6 +12,8 @@
     --bg:#1f1e1b; --bg-soft:#2a2824; --bg-side:#1a1916; --text:#ece8df;
     --muted:#a39c8c; --border:#34322c; --accent:#e08763; --accent-2:#d97757;
     --accent-soft:#3a2b22; --code-bg:#2a2824; --code-text:#d8cfbf; --quote:#b3aa98;
+    --tok-comment:#8f8a78; --tok-string:#a7c46e; --tok-keyword:#e7926b; --tok-builtin:#5cc4c4;
+    --tok-number:#d6a45a; --tok-decorator:#a78bff; --tok-command:#5cc4c4; --tok-flag:#d6a45a; --tok-variable:#a78bff;
     --link:#ec9170; --header-bg:rgba(31,30,27,.85);
     --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 26px rgba(0,0,0,.4);
   }
@@ -106,6 +110,15 @@
   article pre{background:var(--code-bg); border:1px solid var(--border); border-radius:var(--radius);
     padding:14px 16px; overflow-x:auto; -webkit-overflow-scrolling:touch; margin:1.1em 0}
   article pre code{background:none; padding:0; font-size:13px; color:var(--code-text); white-space:pre; word-break:normal}
+  article pre .tok-comment{color:var(--tok-comment); font-style:italic}
+  article pre .tok-string{color:var(--tok-string)}
+  article pre .tok-keyword{color:var(--tok-keyword); font-weight:600}
+  article pre .tok-builtin{color:var(--tok-builtin)}
+  article pre .tok-number{color:var(--tok-number)}
+  article pre .tok-decorator{color:var(--tok-decorator)}
+  article pre .tok-command{color:var(--tok-command); font-weight:600}
+  article pre .tok-flag{color:var(--tok-flag)}
+  article pre .tok-variable{color:var(--tok-variable)}
   article blockquote{margin:1.1em 0; padding:.5em 1.1em; border-left:3px solid var(--accent);
     background:var(--bg-soft); color:var(--quote); border-radius:0 10px 10px 0}
   article blockquote p{margin:.3em 0}

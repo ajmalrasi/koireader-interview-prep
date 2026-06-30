@@ -93,6 +93,35 @@ const SITE = [
 function escapeHtml(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
 function slug(s){return s.toLowerCase().replace(/<[^>]+>/g,"").replace(/[^\w\s-]/g,"").trim().replace(/\s+/g,"-");}
 
+/* ----- lightweight build-time syntax highlighter (Python / bash) ----- */
+const HL = {
+  python: {
+    re: /(#[^\n]*)|("""[\s\S]*?"""|'''[\s\S]*?''')|([rbfRBF]{0,2}"(?:\\.|[^"\\])*"|[rbfRBF]{0,2}'(?:\\.|[^'\\])*')|(@[A-Za-z_]\w*)|\b(def|class|return|if|elif|else|for|while|try|except|finally|with|as|import|from|in|not|and|or|lambda|yield|pass|break|continue|global|nonlocal|raise|assert|del|is|async|await|None|True|False|self)\b|\b(print|len|range|int|str|float|list|dict|set|tuple|bool|bytes|open|enumerate|zip|map|filter|isinstance|super|hash|abs|min|max|sum|np|cv2|Gst|GLib|GObject|gi|pyds)\b|\b(0[xX][0-9a-fA-F]+|\d+\.?\d*)\b/g,
+    cls: ["comment","string","string","decorator","keyword","builtin","number"]
+  },
+  bash: {
+    re: /(#[^\n]*)|("(?:\\.|[^"\\])*"|'[^']*')|\b(gst-launch-1\.0|gst-inspect-1\.0|ffprobe|ffmpeg|python3?|node|pip3?|bash|sudo|export|cd|dot|nvidia-smi|tegrastats|cat|grep|ls)\b|(\$\{[^}]+\}|\$\w+)|(?<![\w-])(-{1,2}[A-Za-z][\w-]*)|\b(0[xX][0-9a-fA-F]+|\d+\.?\d*)\b/g,
+    cls: ["comment","string","command","variable","flag","number"]
+  }
+};
+HL.py = HL.python; HL.sh = HL.bash; HL.shell = HL.bash;
+function highlight(code, lang){
+  const spec = HL[lang];
+  if(!spec) return escapeHtml(code);
+  let out="", last=0, m;
+  spec.re.lastIndex = 0;
+  while((m = spec.re.exec(code))){
+    if(m.index>last) out += escapeHtml(code.slice(last, m.index));
+    let cls="text";
+    for(let g=1; g<m.length; g++){ if(m[g]!==undefined){ cls=spec.cls[g-1]; break; } }
+    out += '<span class="tok-'+cls+'">'+escapeHtml(m[0])+'</span>';
+    last = spec.re.lastIndex;
+    if(m[0]===""){ spec.re.lastIndex++; last = spec.re.lastIndex; }
+  }
+  out += escapeHtml(code.slice(last));
+  return out;
+}
+
 function inlineMd(s){
   const codes=[];
   s = s.replace(/`([^`]+)`/g, (m,c)=>{ codes.push(c); return "@@CODE"+(codes.length-1)+"@@"; });
@@ -127,7 +156,14 @@ function renderMarkdown(md){
       i++; let buf=[];
       while(i<lines.length && !/^\s*```/.test(lines[i])){ buf.push(lines[i]); i++; }
       i++;
-      out.push('<pre><code'+(lang?' class="language-'+lang+'"':'')+'>'+escapeHtml(buf.join("\n"))+'</code></pre>');
+      const code = buf.join("\n");
+      if(/^fig:/.test(lang)){                       // inline SVG diagram
+        const name = lang.slice(4).trim();
+        const cap = code.trim().replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+        out.push(D[name] ? fig(D[name], cap) : '<pre><code>'+escapeHtml(code)+'</code></pre>');
+        continue;
+      }
+      out.push('<pre><code'+(lang?' class="language-'+lang+'"':'')+'>'+highlight(code, lang)+'</code></pre>');
       continue;
     }
     let h = line.match(/^(#{1,6})\s+(.*)$/);
