@@ -19,7 +19,9 @@ function buildNav(){
   const nav=document.getElementById("nav");
   DATA.nav.forEach(sec=>{
     const wrap=document.createElement("div"); wrap.className="sec";
-    const h=document.createElement("div"); h.className="sec-h"; h.textContent=sec.label;
+    const h=document.createElement("div"); h.className="sec-h";
+    h.innerHTML='<span class="sec-ic">'+(sec.icon||"")+'</span> '+sec.label;
+    h.style.setProperty("--card", sec.accent);
     wrap.appendChild(h);
     sec.items.forEach(it=>{
       const a=document.createElement("a");
@@ -80,6 +82,10 @@ function loadPage(path){
   if(!pg){ content.innerHTML='<div class="loading">Page not found: '+path+'</div>'; document.getElementById("pagetools").innerHTML=""; document.getElementById("pager").innerHTML=""; return; }
   currentPath=path;
   setActive(path);
+  // tint the page to its section accent
+  const root=document.documentElement.style;
+  if(pg.accent){ root.setProperty("--sec-accent", pg.accent); root.setProperty("--sec-accent-soft", pg.soft||pg.accent); }
+  else { root.removeProperty("--sec-accent"); root.removeProperty("--sec-accent-soft"); }
   content.innerHTML=pg.html;
   renderPageTools(pg);
   renderPager(path);

@@ -10,6 +10,7 @@
 const fs = require("fs");
 const path = require("path");
 const ROOT = __dirname;
+const { D, DIAGRAMS, SECTIONS, fig } = require("./_diagrams.js");
 
 /* ----------------------------- site structure ----------------------------- */
 const SITE = [
@@ -203,22 +204,56 @@ function extractTOC(html){
 function stripTags(html){ return html.replace(/<[^>]+>/g," ").replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/\s+/g," ").trim(); }
 
 /* ------------------------------- build data -------------------------------- */
+// Turn "**TL;DR:** ..." into a highlighted insight card.
+function calloutTLDR(html){
+  return html.replace(/<p><strong>TL;DR:?<\/strong>\s*([\s\S]*?)<\/p>/,
+    (m, body) => '<div class="callout tldr"><div class="cic">💡</div><div class="cbody"><span class="clead">TL;DR</span> '+body.trim()+'</div></div>');
+}
+// Inject a concept diagram right after the page's <h1>.
+function injectDiagram(rel, html){
+  const d = DIAGRAMS[rel]; if(!d) return html;
+  const svg = fig(D[d[0]], d[1]);
+  return /<\/h1>/.test(html) ? html.replace(/<\/h1>/, "</h1>\n"+svg) : svg+html;
+}
+// Graphical section cards for the home page.
+function homeCards(){
+  const cards = SITE.filter(s=>s.dir).map(sec=>{
+    const m = SECTIONS[sec.label] || {};
+    const href = sec.dir + "/README.md";
+    return '<a class="seccard mdlink" data-href="'+href+'" href="#" style="--card:'+m.accent+';--cardsoft:'+m.soft+'">'+
+      '<span class="sc-ic">'+(m.icon||"•")+'</span>'+
+      '<span class="sc-lbl">'+sec.label+'</span>'+
+      '<span class="sc-tag">'+(m.tag||"")+'</span></a>';
+  }).join("");
+  return '<h2 id="jump-in">Jump in</h2><div class="section-cards">'+cards+'</div>';
+}
+const HOME_HERO =
+  '<div class="hero"><span class="hero-badge">KoiReader · Computer Vision Engineer</span>'+
+  '<div class="hero-title">Interview Prep</div>'+
+  '<p class="hero-sub">Systems-first Vision AI — streaming pipelines, ultra-low-latency inference, '+
+  'and crash-proof systems. Nine chapters, a drill bank, and a full mock.</p></div>';
+
 const PAGES = [];
-let firstH1Missing = 0;
 SITE.forEach(sec => sec.items.forEach(it => {
   const rel = (sec.dir ? sec.dir + "/" : "") + it.file;
   const md = fs.readFileSync(path.join(ROOT, rel), "utf8");
   let html = renderMarkdown(md);
   if(it.quiz) html = wrapQA(html);
+  html = calloutTLDR(html);
+  html = injectDiagram(rel, html);
+  if(rel === "README.md") html = HOME_HERO + html.replace(/<\/figure>/, "</figure>\n"+homeCards());
   const toc = extractTOC(html);
   const text = stripTags(html).toLowerCase();
-  PAGES.push({ path:rel, title:it.title, section:sec.label, quiz:!!it.quiz, html, toc, text, words: text.split(" ").length });
+  const meta = SECTIONS[sec.label] || {};
+  PAGES.push({ path:rel, title:it.title, section:sec.label, quiz:!!it.quiz,
+    accent:meta.accent||"", soft:meta.soft||"", html, toc, text, words: text.split(" ").length });
 }));
 
-const NAV = SITE.map(sec => ({
-  label: sec.label,
-  items: sec.items.map(it => ({ path:(sec.dir?sec.dir+"/":"")+it.file, title:it.title }))
-}));
+const NAV = SITE.map(sec => {
+  const m = SECTIONS[sec.label] || {};
+  return { label: sec.label, icon: m.icon||"", accent: m.accent||"var(--accent)",
+    items: sec.items.map(it => ({ path:(sec.dir?sec.dir+"/":"")+it.file, title:it.title })) };
+});
 
 const DATA = { nav: NAV, pages: PAGES };
 let dataJson = JSON.stringify(DATA).replace(/<\//g, "<\\/");  // keep </script> safe
