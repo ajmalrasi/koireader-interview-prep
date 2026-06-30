@@ -40,12 +40,13 @@ the best, drop high-IoU neighbours.
 ```python
 def nms(boxes, scores, iou_thresh=0.5):
     """boxes: list of (x1,y1,x2,y2); scores: list of floats. Returns kept indices."""
-    idxs = sorted(range(len(boxes)), key=lambda i: scores[i], reverse=True)
+    candidates = sorted(range(len(boxes)), key=lambda i: scores[i], reverse=True)
     keep = []
-    while idxs:
-        cur = idxs.pop(0)
-        keep.append(cur)
-        idxs = [i for i in idxs if iou(boxes[cur], boxes[i]) < iou_thresh]
+    while candidates:
+        best = candidates.pop(0)        # highest score still in play
+        keep.append(best)
+        candidates = [i for i in candidates
+                      if iou(boxes[best], boxes[i]) < iou_thresh]
     return keep
 ```
 
@@ -58,18 +59,20 @@ def nms_np(boxes, scores, iou_thresh=0.5):
     boxes = np.asarray(boxes, dtype=float)
     x1, y1, x2, y2 = boxes.T
     areas = (x2 - x1) * (y2 - y1)
-    order = scores.argsort()[::-1]
+    order = scores.argsort()[::-1]          # indices, highest score first
     keep = []
     while order.size > 0:
-        i = order[0]; keep.append(i)
-        xx1 = np.maximum(x1[i], x1[order[1:]])
-        yy1 = np.maximum(y1[i], y1[order[1:]])
-        xx2 = np.minimum(x2[i], x2[order[1:]])
-        yy2 = np.minimum(y2[i], y2[order[1:]])
-        w = np.maximum(0, xx2 - xx1); h = np.maximum(0, yy2 - yy1)
-        inter = w * h
-        ovr = inter / (areas[i] + areas[order[1:]] - inter)
-        order = order[1:][ovr < iou_thresh]
+        best = order[0]; keep.append(best)
+        others = order[1:]
+        inter_x1 = np.maximum(x1[best], x1[others])
+        inter_y1 = np.maximum(y1[best], y1[others])
+        inter_x2 = np.minimum(x2[best], x2[others])
+        inter_y2 = np.minimum(y2[best], y2[others])
+        inter_w = np.maximum(0, inter_x2 - inter_x1)
+        inter_h = np.maximum(0, inter_y2 - inter_y1)
+        intersection = inter_w * inter_h
+        overlaps = intersection / (areas[best] + areas[others] - intersection)
+        order = others[overlaps < iou_thresh]
     return keep
 ```
 
@@ -89,13 +92,13 @@ import numpy as np
 
 def count_in_zone(boxes, polygon):
     """polygon: list of (x,y). Counts boxes whose foot point is inside."""
-    poly = np.array(polygon, dtype=np.int32)
-    n = 0
+    polygon_pts = np.array(polygon, dtype=np.int32)
+    count = 0
     for (x1, y1, x2, y2) in boxes:
-        foot = (int((x1 + x2) / 2), int(y2))            # bottom-center
-        if cv2.pointPolygonTest(poly, foot, False) >= 0:  # >=0 means inside/on
-            n += 1
-    return n
+        foot = (int((x1 + x2) / 2), int(y2))            # bottom-center point
+        if cv2.pointPolygonTest(polygon_pts, foot, False) >= 0:  # >=0 = inside/on
+            count += 1
+    return count
 ```
 
 **Watch out:** use the **foot point** (where the object meets the floor), not the
@@ -116,16 +119,17 @@ def side(line_a, line_b, p):
 
 def count_crossings(tracks, line_a, line_b):
     """tracks: {id: [(x,y) per frame]}. Returns (in_count, out_count)."""
-    inc = out = 0
-    for pts in tracks.values():
-        for prev, cur in zip(pts, pts[1:]):
-            s0, s1 = side(line_a, line_b, prev), side(line_a, line_b, cur)
-            if s0 == 0 or s1 == 0:
+    entering = leaving = 0
+    for path in tracks.values():
+        for prev_point, cur_point in zip(path, path[1:]):
+            side_prev = side(line_a, line_b, prev_point)
+            side_cur = side(line_a, line_b, cur_point)
+            if side_prev == 0 or side_cur == 0:
                 continue
-            if (s0 > 0) != (s1 > 0):        # sign flipped → crossed the line
-                if s1 > 0: inc += 1
-                else: out += 1
-    return inc, out
+            if (side_prev > 0) != (side_cur > 0):   # sign flipped → crossed
+                if side_cur > 0: entering += 1
+                else: leaving += 1
+    return entering, leaving
 ```
 
 **Watch out:** count **per track id** so one object is counted once per crossing,
@@ -140,22 +144,25 @@ not once per frame. Debounce flicker in real systems (K-of-N frames).
 ```python
 def reading_order(boxes, row_tol=15):
     """boxes: list of (x1,y1,x2,y2). Returns indices in reading order."""
-    idx = list(range(len(boxes)))
-    idx.sort(key=lambda i: boxes[i][1])           # by top y first
-    rows, cur, cur_y = [], [], None
-    for i in idx:
-        cy = (boxes[i][1] + boxes[i][3]) / 2
-        if cur_y is None or abs(cy - cur_y) <= row_tol:
-            cur.append(i); cur_y = cy if cur_y is None else (cur_y + cy) / 2
+    order = list(range(len(boxes)))
+    order.sort(key=lambda i: boxes[i][1])         # by top y first
+    rows, current_row, current_row_y = [], [], None
+    for i in order:
+        box_center_y = (boxes[i][1] + boxes[i][3]) / 2
+        if current_row_y is None or abs(box_center_y - current_row_y) <= row_tol:
+            current_row.append(i)
+            current_row_y = (box_center_y if current_row_y is None
+                             else (current_row_y + box_center_y) / 2)
         else:
-            rows.append(cur); cur, cur_y = [i], cy
-    if cur:
-        rows.append(cur)
-    out = []
-    for r in rows:
-        r.sort(key=lambda i: boxes[i][0])         # within a row, left to right
-        out.extend(r)
-    return out
+            rows.append(current_row)
+            current_row, current_row_y = [i], box_center_y
+    if current_row:
+        rows.append(current_row)
+    result = []
+    for row in rows:
+        row.sort(key=lambda i: boxes[i][0])       # within a row, left to right
+        result.extend(row)
+    return result
 ```
 
 **Watch out:** `row_tol` groups boxes into the same line; tune to text height.

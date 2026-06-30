@@ -16,11 +16,11 @@ tint without loops.
 import numpy as np
 import cv2
 
-def red_tint_bright_areas(path, out="p16_out.png", thr=180):
+def red_tint_bright_areas(path, out="p16_out.png", bright_threshold=180):
     img = cv2.imread(path)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    mask = gray > thr                       # boolean array, fully vectorized
-    img[mask] = [0, 0, 255]                 # set all bright pixels red (BGR)
+    bright_mask = gray > bright_threshold    # boolean array, fully vectorized
+    img[bright_mask] = [0, 0, 255]           # set all bright pixels red (BGR)
     cv2.imwrite(out, img)
     return img
 
@@ -84,10 +84,11 @@ import cv2
 
 def count_blobs(path, min_area=50):
     img = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
-    _, th = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    n, labels, stats, centroids = cv2.connectedComponentsWithStats(th)
+    _, binary = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(binary)
     # label 0 is the background; filter tiny specks by area
-    blobs = [i for i in range(1, n) if stats[i, cv2.CC_STAT_AREA] >= min_area]
+    blobs = [i for i in range(1, num_labels)
+             if stats[i, cv2.CC_STAT_AREA] >= min_area]
     return len(blobs), centroids[blobs]
 ```
 
@@ -101,21 +102,22 @@ def count_islands(grid):
     """grid: 2D list of 0/1. Counts 4-connected components of 1s."""
     if not grid:
         return 0
-    R, C = len(grid), len(grid[0])
-    seen = [[False] * C for _ in range(R)]
+    rows, cols = len(grid), len(grid[0])
+    seen = [[False] * cols for _ in range(rows)]
     count = 0
-    for r in range(R):
-        for c in range(C):
-            if grid[r][c] == 1 and not seen[r][c]:
+    for row in range(rows):
+        for col in range(cols):
+            if grid[row][col] == 1 and not seen[row][col]:
                 count += 1
-                q = deque([(r, c)]); seen[r][c] = True
-                while q:
-                    y, x = q.popleft()
-                    for dy, dx in ((1,0),(-1,0),(0,1),(0,-1)):
-                        ny, nx = y + dy, x + dx
-                        if 0 <= ny < R and 0 <= nx < C and grid[ny][nx] == 1 \
-                           and not seen[ny][nx]:
-                            seen[ny][nx] = True; q.append((ny, nx))
+                queue = deque([(row, col)]); seen[row][col] = True
+                while queue:
+                    r, c = queue.popleft()
+                    for d_row, d_col in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                        next_r, next_c = r + d_row, c + d_col
+                        if 0 <= next_r < rows and 0 <= next_c < cols \
+                           and grid[next_r][next_c] == 1 and not seen[next_r][next_c]:
+                            seen[next_r][next_c] = True
+                            queue.append((next_r, next_c))
     return count
 ```
 

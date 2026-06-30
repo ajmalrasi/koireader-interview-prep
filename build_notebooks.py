@@ -19,6 +19,7 @@ OUT = os.path.join(ROOT, "notebooks")
 os.makedirs(OUT, exist_ok=True)
 
 FILES = [
+    ("00-warm-ups.md",                   "00_warm_ups.ipynb"),
     ("image-processing-and-geometry.md", "01_image_processing_and_geometry.ipynb"),
     ("detection-logic.md",               "02_detection_logic.ipynb"),
     ("video-and-streaming.md",           "03_video_and_streaming.ipynb"),
@@ -98,10 +99,19 @@ def code_cell(text):
     return {"cell_type": "code", "metadata": {}, "execution_count": None,
             "outputs": [], "source": text}
 
+# A ```python-solution block becomes an "active recall" pair: an empty cell for you
+# to write your own answer, plus a collapsible cell holding the solution to check.
+def your_turn_cells(solution_code):
+    starter = ("# ✏️ Your turn — write your answer here, then run it (Shift+Enter).\n"
+               "# Only expand \"Show solution\" below once you've given it a real try.\n")
+    solution = ("<details>\n<summary>✅ Show solution</summary>\n\n"
+                "```python\n" + solution_code + "\n```\n\n</details>")
+    return [code_cell(starter), md_cell(solution)]
+
 def defined_funcs(code):
     return re.findall(r"^def\s+(\w+)", code, re.M)
 
-def build(md_path):
+def build(md_path, is_warmup=False):
     txt = open(md_path, encoding="utf-8").read()
     lines = txt.split("\n")
     cells = []
@@ -114,9 +124,15 @@ def build(md_path):
         intro.append(lines[i]); i += 1
     cells.append(md_cell("\n".join(intro).strip()))
     cells.append(code_cell(SETUP))
-    cells.append(md_cell("> **Tip:** run the setup cell above first. Each problem "
-                         "below defines its solution and then runs a quick demo. "
-                         "Edit and re-run any cell to experiment."))
+    if is_warmup:
+        cells.append(md_cell("> **Tip:** run the setup cell above first (it creates "
+                             "`input.jpg` for you). Then for each warm-up: run the "
+                             "worked example, and **type the ✏️ Your turn yourself** in "
+                             "the blank cell before peeking at the solution."))
+    else:
+        cells.append(md_cell("> **Tip:** run the setup cell above first. Each problem "
+                             "below defines its solution and then runs a quick demo. "
+                             "Edit and re-run any cell to experiment."))
 
     # walk the rest, splitting prose / code in order
     buf = []
@@ -130,7 +146,17 @@ def build(md_path):
 
     while i < len(lines):
         line = lines[i]
-        if line.startswith("```python"):
+        if line.startswith("```python-solution"):
+            # "Your turn" exercise: emit a blank cell + a collapsible solution.
+            flush_prose()
+            i += 1
+            code = []
+            while i < len(lines) and not lines[i].startswith("```"):
+                code.append(lines[i]); i += 1
+            i += 1  # skip closing fence
+            for cell in your_turn_cells("\n".join(code).rstrip()):
+                cells.append(cell)
+        elif line.startswith("```python"):
             flush_prose()
             i += 1
             code = []
@@ -162,7 +188,7 @@ def build(md_path):
     }
 
 for src, out in FILES:
-    nb = build(os.path.join(SRC, src))
+    nb = build(os.path.join(SRC, src), is_warmup=src.startswith("00-"))
     with open(os.path.join(OUT, out), "w", encoding="utf-8") as f:
         json.dump(nb, f, indent=1)
     print("wrote notebooks/%s  (%d cells)" % (out, len(nb["cells"])))

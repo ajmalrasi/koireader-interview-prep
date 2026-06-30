@@ -21,11 +21,11 @@ def preprocess(path, out="p1_out.png"):
     if img is None:
         raise FileNotFoundError(path)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    blur = cv2.GaussianBlur(gray, (5, 5), 0)        # denoise before threshold
+    blurred = cv2.GaussianBlur(gray, (5, 5), 0)     # denoise before threshold
     # Otsu auto-picks the threshold; THRESH_BINARY_INV makes text white on black
-    _, th = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    cv2.imwrite(out, th)
-    return th
+    _, binary = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    cv2.imwrite(out, binary)
+    return binary
 
 if __name__ == "__main__":
     preprocess("input.jpg")
@@ -49,10 +49,10 @@ def clean_scan(path, out="p2_out.png"):
     if img is None:
         raise FileNotFoundError(path)
     # adaptive: threshold computed per-region → robust to shadows/gradients
-    th = cv2.adaptiveThreshold(img, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-                               cv2.THRESH_BINARY, blockSize=31, C=10)
+    binary = cv2.adaptiveThreshold(img, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                   cv2.THRESH_BINARY, blockSize=31, C=10)
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
-    opened = cv2.morphologyEx(th, cv2.MORPH_OPEN, kernel)   # remove small noise
+    opened = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel)   # remove small noise
     cv2.imwrite(out, opened)
     return opened
 ```
@@ -73,14 +73,14 @@ import numpy as np
 def deskew(path, out="p3_out.png"):
     img = cv2.imread(path)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    th = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
-    coords = np.column_stack(np.where(th > 0))      # (row, col) of foreground
-    angle = cv2.minAreaRect(coords)[-1]             # angle of tightest box
+    binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
+    foreground_pixels = np.column_stack(np.where(binary > 0))  # (row, col) of text
+    angle = cv2.minAreaRect(foreground_pixels)[-1]  # angle of tightest box
     if angle < -45:
         angle = 90 + angle
-    (h, w) = img.shape[:2]
-    M = cv2.getRotationMatrix2D((w / 2, h / 2), angle, 1.0)
-    rotated = cv2.warpAffine(img, M, (w, h),
+    (height, width) = img.shape[:2]
+    rotation_matrix = cv2.getRotationMatrix2D((width / 2, height / 2), angle, 1.0)
+    rotated = cv2.warpAffine(img, rotation_matrix, (width, height),
                              flags=cv2.INTER_CUBIC,
                              borderMode=cv2.BORDER_REPLICATE)
     cv2.imwrite(out, rotated)
@@ -102,49 +102,50 @@ pair cold.
 import cv2
 import numpy as np
 
-def order_points(pts):
+def order_points(points):
     """Return corners as [top-left, top-right, bottom-right, bottom-left]."""
-    rect = np.zeros((4, 2), dtype="float32")
-    s = pts.sum(axis=1)
-    rect[0] = pts[np.argmin(s)]      # TL has smallest x+y
-    rect[2] = pts[np.argmax(s)]      # BR has largest x+y
-    d = np.diff(pts, axis=1)
-    rect[1] = pts[np.argmin(d)]      # TR has smallest y-x
-    rect[3] = pts[np.argmax(d)]      # BL has largest y-x
-    return rect
+    ordered = np.zeros((4, 2), dtype="float32")
+    coord_sum = points.sum(axis=1)
+    ordered[0] = points[np.argmin(coord_sum)]    # top-left has smallest x+y
+    ordered[2] = points[np.argmax(coord_sum)]    # bottom-right has largest x+y
+    coord_diff = np.diff(points, axis=1)
+    ordered[1] = points[np.argmin(coord_diff)]   # top-right has smallest y-x
+    ordered[3] = points[np.argmax(coord_diff)]   # bottom-left has largest y-x
+    return ordered
 
-def four_point_transform(image, pts):
-    rect = order_points(pts)
-    (tl, tr, br, bl) = rect
-    widthA = np.linalg.norm(br - bl)
-    widthB = np.linalg.norm(tr - tl)
-    maxW = int(max(widthA, widthB))
-    heightA = np.linalg.norm(tr - br)
-    heightB = np.linalg.norm(tl - bl)
-    maxH = int(max(heightA, heightB))
-    dst = np.array([[0, 0], [maxW - 1, 0],
-                    [maxW - 1, maxH - 1], [0, maxH - 1]], dtype="float32")
-    M = cv2.getPerspectiveTransform(rect, dst)
-    return cv2.warpPerspective(image, M, (maxW, maxH))
+def four_point_transform(image, points):
+    ordered = order_points(points)
+    (top_left, top_right, bottom_right, bottom_left) = ordered
+    width_bottom = np.linalg.norm(bottom_right - bottom_left)
+    width_top = np.linalg.norm(top_right - top_left)
+    out_width = int(max(width_bottom, width_top))
+    height_right = np.linalg.norm(top_right - bottom_right)
+    height_left = np.linalg.norm(top_left - bottom_left)
+    out_height = int(max(height_right, height_left))
+    destination = np.array([[0, 0], [out_width - 1, 0],
+                            [out_width - 1, out_height - 1], [0, out_height - 1]],
+                           dtype="float32")
+    perspective_matrix = cv2.getPerspectiveTransform(ordered, destination)
+    return cv2.warpPerspective(image, perspective_matrix, (out_width, out_height))
 
 def scan(path, out="p4_out.png"):
     img = cv2.imread(path)
     ratio = img.shape[0] / 500.0
-    small = cv2.resize(img, (int(img.shape[1] / ratio), 500))
-    gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
+    resized = cv2.resize(img, (int(img.shape[1] / ratio), 500))
+    gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
     edges = cv2.Canny(cv2.GaussianBlur(gray, (5, 5), 0), 75, 200)
-    cnts, _ = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
-    cnts = sorted(cnts, key=cv2.contourArea, reverse=True)[:5]
-    doc = None
-    for c in cnts:
-        peri = cv2.arcLength(c, True)
-        approx = cv2.approxPolyDP(c, 0.02 * peri, True)   # simplify to corners
-        if len(approx) == 4:                              # found a quadrilateral
-            doc = approx.reshape(4, 2) * ratio            # scale back to full res
+    contours, _ = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+    contours = sorted(contours, key=cv2.contourArea, reverse=True)[:5]
+    document_corners = None
+    for contour in contours:
+        perimeter = cv2.arcLength(contour, True)
+        corners = cv2.approxPolyDP(contour, 0.02 * perimeter, True)  # simplify
+        if len(corners) == 4:                              # found a quadrilateral
+            document_corners = corners.reshape(4, 2) * ratio  # scale to full res
             break
-    if doc is None:
+    if document_corners is None:
         raise RuntimeError("no 4-corner document found")
-    warped = four_point_transform(img, doc.astype("float32"))
+    warped = four_point_transform(img, document_corners.astype("float32"))
     cv2.imwrite(out, warped)
     return warped
 ```
@@ -166,11 +167,11 @@ def crop_largest_rect(path, out="p5_out.png"):
     img = cv2.imread(path)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     edges = cv2.Canny(cv2.GaussianBlur(gray, (5, 5), 0), 50, 150)
-    cnts, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    if not cnts:
+    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
         raise RuntimeError("no contours")
-    c = max(cnts, key=cv2.contourArea)
-    x, y, w, h = cv2.boundingRect(c)
+    largest = max(contours, key=cv2.contourArea)
+    x, y, w, h = cv2.boundingRect(largest)
     crop = img[y:y + h, x:x + w]
     cv2.imwrite(out, crop)
     return crop
@@ -192,11 +193,11 @@ def letterbox(path, size=640, out="p6_out.png"):
     img = cv2.imread(path)
     h, w = img.shape[:2]
     scale = size / max(h, w)
-    nw, nh = int(w * scale), int(h * scale)
-    resized = cv2.resize(img, (nw, nh), interpolation=cv2.INTER_AREA)
+    new_w, new_h = int(w * scale), int(h * scale)
+    resized = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
     canvas = np.full((size, size, 3), 114, dtype=np.uint8)   # gray pad
-    top, left = (size - nh) // 2, (size - nw) // 2
-    canvas[top:top + nh, left:left + nw] = resized
+    top, left = (size - new_h) // 2, (size - new_w) // 2
+    canvas[top:top + new_h, left:left + new_w] = resized
     cv2.imwrite(out, canvas)
     return canvas
 ```
@@ -216,10 +217,11 @@ import cv2
 def enhance(path, out="p7_out.png"):
     img = cv2.imread(path)
     lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)       # equalize L, keep color
-    l, a, b = cv2.split(lab)
+    lightness, green_red, blue_yellow = cv2.split(lab)
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-    l2 = clahe.apply(l)
-    out_img = cv2.cvtColor(cv2.merge((l2, a, b)), cv2.COLOR_LAB2BGR)
+    equalized_lightness = clahe.apply(lightness)
+    merged = cv2.merge((equalized_lightness, green_red, blue_yellow))
+    out_img = cv2.cvtColor(merged, cv2.COLOR_LAB2BGR)
     cv2.imwrite(out, out_img)
     return out_img
 ```
