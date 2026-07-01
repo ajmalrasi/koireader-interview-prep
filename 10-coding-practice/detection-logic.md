@@ -14,13 +14,13 @@ Pure Python + NumPy — no model needed. These are classic, so know them cold.
 ```python
 def iou(a, b):
     """Boxes as (x1, y1, x2, y2). Returns intersection-over-union in [0,1]."""
-    ix1, iy1 = max(a[0], b[0]), max(a[1], b[1])
-    ix2, iy2 = min(a[2], b[2]), min(a[3], b[3])
+    ix1, iy1 = max(a[0], b[0]), max(a[1], b[1])     # intersection top-left
+    ix2, iy2 = min(a[2], b[2]), min(a[3], b[3])     # intersection bottom-right
     iw, ih = max(0, ix2 - ix1), max(0, iy2 - iy1)   # clamp at 0 → no overlap
     inter = iw * ih
     area_a = (a[2] - a[0]) * (a[3] - a[1])
     area_b = (b[2] - b[0]) * (b[3] - b[1])
-    union = area_a + area_b - inter
+    union = area_a + area_b - inter                 # don't double-count the overlap
     return inter / union if union > 0 else 0.0
 
 if __name__ == "__main__":
@@ -40,13 +40,13 @@ the best, drop high-IoU neighbours.
 ```python
 def nms(boxes, scores, iou_thresh=0.5):
     """boxes: list of (x1,y1,x2,y2); scores: list of floats. Returns kept indices."""
-    candidates = sorted(range(len(boxes)), key=lambda i: scores[i], reverse=True)
+    candidates = sorted(range(len(boxes)), key=lambda i: scores[i], reverse=True)  # best first
     keep = []
     while candidates:
         best = candidates.pop(0)        # highest score still in play
         keep.append(best)
-        candidates = [i for i in candidates
-                      if iou(boxes[best], boxes[i]) < iou_thresh]
+        candidates = [i for i in candidates             # drop everything that
+                      if iou(boxes[best], boxes[i]) < iou_thresh]  # overlaps the winner
     return keep
 ```
 
@@ -57,13 +57,14 @@ import numpy as np
 
 def nms_np(boxes, scores, iou_thresh=0.5):
     boxes = np.asarray(boxes, dtype=float)
-    x1, y1, x2, y2 = boxes.T
+    x1, y1, x2, y2 = boxes.T                # columns → four 1-D arrays
     areas = (x2 - x1) * (y2 - y1)
     order = scores.argsort()[::-1]          # indices, highest score first
     keep = []
     while order.size > 0:
         best = order[0]; keep.append(best)
         others = order[1:]
+        # IoU of `best` vs ALL remaining boxes at once (no inner loop)
         inter_x1 = np.maximum(x1[best], x1[others])
         inter_y1 = np.maximum(y1[best], y1[others])
         inter_x2 = np.minimum(x2[best], x2[others])
@@ -72,7 +73,7 @@ def nms_np(boxes, scores, iou_thresh=0.5):
         inter_h = np.maximum(0, inter_y2 - inter_y1)
         intersection = inter_w * inter_h
         overlaps = intersection / (areas[best] + areas[others] - intersection)
-        order = others[overlaps < iou_thresh]
+        order = others[overlaps < iou_thresh]   # keep only low-overlap survivors
     return keep
 ```
 
@@ -115,16 +116,16 @@ direction between consecutive frames.
 def side(line_a, line_b, p):
     """Sign of which side of line (a->b) point p is on (cross product z)."""
     return ((line_b[0] - line_a[0]) * (p[1] - line_a[1]) -
-            (line_b[1] - line_a[1]) * (p[0] - line_a[0]))
+            (line_b[1] - line_a[1]) * (p[0] - line_a[0]))   # >0 / <0 / 0=on line
 
 def count_crossings(tracks, line_a, line_b):
     """tracks: {id: [(x,y) per frame]}. Returns (in_count, out_count)."""
     entering = leaving = 0
     for path in tracks.values():
-        for prev_point, cur_point in zip(path, path[1:]):
+        for prev_point, cur_point in zip(path, path[1:]):   # consecutive frames
             side_prev = side(line_a, line_b, prev_point)
             side_cur = side(line_a, line_b, cur_point)
-            if side_prev == 0 or side_cur == 0:
+            if side_prev == 0 or side_cur == 0:   # exactly ON the line: skip
                 continue
             if (side_prev > 0) != (side_cur > 0):   # sign flipped → crossed
                 if side_cur > 0: entering += 1
@@ -150,11 +151,11 @@ def reading_order(boxes, row_tol=15):
     for i in order:
         box_center_y = (boxes[i][1] + boxes[i][3]) / 2
         if current_row_y is None or abs(box_center_y - current_row_y) <= row_tol:
-            current_row.append(i)
+            current_row.append(i)                 # same line of text
             current_row_y = (box_center_y if current_row_y is None
-                             else (current_row_y + box_center_y) / 2)
+                             else (current_row_y + box_center_y) / 2)  # running avg
         else:
-            rows.append(current_row)
+            rows.append(current_row)              # row finished, start a new one
             current_row, current_row_y = [i], box_center_y
     if current_row:
         rows.append(current_row)

@@ -55,12 +55,12 @@ def detect_motion(source, out="p14_out.mp4", min_area=800):
     cap = cv2.VideoCapture(source)
     if not cap.isOpened():
         raise RuntimeError(f"cannot open {source}")
-    fps = cap.get(cv2.CAP_PROP_FPS) or 25
+    fps = cap.get(cv2.CAP_PROP_FPS) or 25            # some sources report 0
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")         # codec for .mp4
     writer = cv2.VideoWriter(out, fourcc, fps, (width, height))
-    prev_gray = None
+    prev_gray = None                                 # nothing to diff on frame 1
     try:
         while True:
             ok, frame = cap.read()
@@ -69,22 +69,22 @@ def detect_motion(source, out="p14_out.mp4", min_area=800):
             gray = cv2.GaussianBlur(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY),
                                     (21, 21), 0)
             if prev_gray is not None:
-                frame_diff = cv2.absdiff(prev_gray, gray)
+                frame_diff = cv2.absdiff(prev_gray, gray)   # |previous - current|
                 motion_mask = cv2.threshold(frame_diff, 25, 255,
-                                            cv2.THRESH_BINARY)[1]
-                motion_mask = cv2.dilate(motion_mask, None, iterations=2)
+                                            cv2.THRESH_BINARY)[1]  # keep big changes
+                motion_mask = cv2.dilate(motion_mask, None, iterations=2)  # merge blobs
                 contours, _ = cv2.findContours(motion_mask, cv2.RETR_EXTERNAL,
                                                cv2.CHAIN_APPROX_SIMPLE)
                 for contour in contours:
-                    if cv2.contourArea(contour) < min_area:
+                    if cv2.contourArea(contour) < min_area:  # ignore tiny flicker
                         continue
                     x, y, box_w, box_h = cv2.boundingRect(contour)
                     cv2.rectangle(frame, (x, y), (x + box_w, y + box_h),
                                   (0, 255, 0), 2)
             writer.write(frame)
-            prev_gray = gray
+            prev_gray = gray                 # current frame becomes the baseline
     finally:
-        cap.release(); writer.release()
+        cap.release(); writer.release()      # ALWAYS release both (no leaks)
     return out
 ```
 
@@ -113,9 +113,10 @@ def annotate(source, out="p15_out.mp4"):
         if not ok:
             break
         frame_count += 1
-        measured_fps = frame_count / (time.time() - start_time + 1e-9)
+        measured_fps = frame_count / (time.time() - start_time + 1e-9)  # avoid /0
         cv2.putText(frame, f"frame {frame_count}  {measured_fps:4.1f} fps",
-                    (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
+                    (10, 30),                        # (x, y) of text bottom-left
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)  # BGR yellow
         writer.write(frame)
     cap.release(); writer.release()
     return frame_count

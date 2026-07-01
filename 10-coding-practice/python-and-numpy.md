@@ -52,7 +52,7 @@ def process_folder(in_dir, out_dir):
     exts = (".jpg", ".jpeg", ".png", ".bmp")
     ok = fail = 0
     for name in sorted(os.listdir(in_dir)):
-        if not name.lower().endswith(exts):
+        if not name.lower().endswith(exts):     # skip non-image files
             continue
         src = os.path.join(in_dir, name)
         try:
@@ -107,12 +107,13 @@ def count_islands(grid):
     count = 0
     for row in range(rows):
         for col in range(cols):
-            if grid[row][col] == 1 and not seen[row][col]:
+            if grid[row][col] == 1 and not seen[row][col]:  # new island found
                 count += 1
+                # BFS flood-fill: mark every 1 connected to this one as seen
                 queue = deque([(row, col)]); seen[row][col] = True
                 while queue:
                     r, c = queue.popleft()
-                    for d_row, d_col in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                    for d_row, d_col in ((1, 0), (-1, 0), (0, 1), (0, -1)):  # 4-conn
                         next_r, next_c = r + d_row, c + d_col
                         if 0 <= next_r < rows and 0 <= next_c < cols \
                            and grid[next_r][next_c] == 1 and not seen[next_r][next_c]:
