@@ -47,6 +47,9 @@ drift. Four notebooks in `notebooks/`:
 2. `02_detection_logic.ipynb` — IoU, NMS, zones, line-crossing, reading order
 3. `03_video_and_streaming.ipynb` — robust capture, motion, annotate
 4. `04_python_and_numpy.ipynb` — vectorization, fault-tolerant batch, blobs
+5. `06_core_drills.ipynb` — hand-curated cut of the ~12 highest-yield problems
+   from notebooks 00–04, ordered by likelihood for this role (not auto-generated
+   from a `.md` — edit it directly)
 
 Each notebook's **first code cell** creates synthetic sample images
 (`input.jpg`, `test.avi`, …) so every cell runs out of the box. **Swap `input.jpg`

@@ -10,10 +10,15 @@ __pycache__/
 notebooks/input.jpg
 notebooks/noisy.jpg
 notebooks/low.jpg
+notebooks/color.jpg
+notebooks/barcode.jpg
+notebooks/lines.jpg
 notebooks/test.avi
 notebooks/motion.avi
 notebooks/annot.avi
 notebooks/frames/
 notebooks/ind/
 notebooks/outd/
+notebooks/p*_out.png
+notebooks/e*_out.png
 *.html.bak
